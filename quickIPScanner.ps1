@@ -1,170 +1,90 @@
 function Validate-IPAddress {
 <#
 .SYNOPSIS
-    Validates IP Address - returns $true or $null
+    Returns true if the given string is a valid IP address, else returns $null
 .EXAMPLE
-    Validate-IPAddress -IP 192.168.20.1
+    Validate-IPAddress -IP 192.168.1.1
 #>
   param(
     [Parameter(Mandatory=$true, Position=0)][String]$IP
   )
 
-  $prefix = "Address is invalid:"
+  # Regex to validate IP address
+  $regex = "^([0-9]{1,3}\.){3}[0-9]{1,3}$"
 
-  # Split IP into octets
-  $octs = $IP.Split(".")
+  # Test if IP matches regex
+  if ($IP -match $regex) {
+    # Split into octets
+    $octets = $IP.Split(".")
 
-  # Check if we have 4 octets
-  if ($octs.Length -ne 4) {
-    Write-Error "$prefix $IP does not contain 4 octets"
-    return $null
-  }
-  
-  # Check each octet for failure conditions
-  foreach ($oct in $octs) {
-    # Check if all characters are numbers
-    if ($oct -notmatch "^\d+$") {
-      Write-Error "$prefix octet $oct contains non numeric digits"
-      return $null
+    # Test if each octet is between 0 and 255
+    foreach ($octet in $octets) {
+      if ($octet -lt 0 -or $octet -gt 255) { 
+        Write-Error "Octet $octet is not between 0 and 255"
+        return $null 
+      }
     }
 
-    # Check for proper length 1-3 chars long
-    if ($oct.Length -gt 3 -or $oct.Length -lt 1) {
-      Write-Error "$prefix octet $oct is not the correct length"
-      return $null
-    }
-
-    # Check if greater than 254
-    if ([int]$oct -gt 254) {
-      Write-Error "$prefix octet $oct is greater than 254"
-      return $null
-    }
+    return $true # If we made it here, we have a valid IP address
+  } else { 
+    Write-Error "Invalid IP address: $IP"
+    return $null 
   }
-
-  return $true # return true if we didn't fail on above checks
 }
 
-function Compare-Octets {
+function Validate-IPRange {
 <#
 .SYNOPSIS
-    Compares octets of passed in strings - returns an array containing the index of matching octets
+    Returns true if the given start IP address is less than the given end IP address, else returns $null
 .EXAMPLE
-    Compare-Octets -Start 192.168.100.1 -End 192.168.30.50
-#>
-  param(
-    [Parameter(Mandatory=$true,  Position=0)][String]$Start,
-    [Parameter(Mandatory=$false, Position=1)][String]$End
-  )
-
-  # Split into Octets
-  $startOcts = $Start.Split(".")
-  $endOcts   = $End.Split(".")
-
-  # Loop through octets and compart them
-  $sameOcts = @()
-  for ($i = 0; $i -lt 3; $i++ ) {
-    # Set values for easy writing
-    $startOct = $startOcts[$i]
-    $endOct   = $endOcts[$i]
-
-    # Compare - if identical then add to the sameOcts array
-    if (!(Compare-Object $startOct $endOct)) { $sameOcts += $i }
-  }
-
-  return $sameOcts
-}
-
-function Compare-LastOctet {
-<#
-.SYNOPSIS
-    Compares last octets of passed in strings - returns $true if End > Start else returns $null
-.EXAMPLE
-    Compare-LastOctet -Start 192.168.100.1 -End 192.168.30.50
-#>
-  param(
-    [Parameter(Mandatory=$true,  Position=0)][String]$Start,
-    [Parameter(Mandatory=$false, Position=1)][String]$End
-  )
-
-  # Split into Octets
-  $startOcts = $Start.Split(".")
-  $endOcts   = $End.Split(".")
-
-  if ($endOcts[3] -le $startOcts[3]) {
-    Write-Error "Last octet of End: $End must be greater than the last octet of Start: $Start"
-    return $null
-  }
-
-  return $true # return true if we didn't fail on above checks
-}
-
-function Scan-IPRange {
-<#
-.SYNOPSIS
-    Returns a hastable of all IP addresses that ping within a given range else reutnrs $null
-.EXAMPLE
-    Scan-IPRange -Start 192.168.100.1 -End 192.168.100.150
-.EXAMPLE
-    Scan-IPRange 192.168.100.1 192.168.100.150    
+    Validate-IPRange -Start 192.168.0.1 -End 192.168.100.1
 #>
   param(
     [Parameter(Mandatory=$true, Position=0)][String]$Start,
     [Parameter(Mandatory=$true, Position=1)][String]$End
   )
 
-  ########################
-  #### Validate Input ####
-  ########################
-  # Validate Addresses
-  if (!(Validate-IPAddress -IP $Start)) { return $null }
-  if (!(Validate-IPAddress -IP $End))   { return $null }
-  
-  # Get list of octets that are identical
-  $sameOctsIndex = Compare-Octets -Start $Start -End $End
-  
-  # Check that End is a greater number than Start - for non similar octets
-  # if (!(Compare-LastOctet -Start $Start -End $End)) { return $null } 
-  0..3 | ForEach-Object {
-    #### Working HERE #####
+  # Split into Octets
+  $sOcts = $Start.Split(".")
+  $eOcts = $End.Split(".")
 
+  # Test at least one octest in eOcts is larger than the corresponding octet in sOcts
+  for ($i = 0; $i -lt 4; $i++) {
+    if ($sOcts[$i] -lt $eOcts[$i]) { return $true }
   }
 
-
-  #########################
-  #### Setup Variables ####
-  #########################
-  # Split into Octets
-  $startOcts = $Start.Split(".")
-  $endOcts   = $End.Split(".")
-
-  # Generate prefix string from Start octets - safe to do b/c we passed validation
-  $prefixString = $startOcts[0] + "." + $startOcts[1] + "." + $startOcts[2] + "."
-
-  # Get last octets of Start and End
-  $lastStartOct = $startOcts[3]
-  $lastEndOct   = $endOcts[3]
-
-  #########################
-  #### Actual Testing  ####
-  #########################
-  $results = $lastStartOct..$lastEndOct | ForEach-Object -Parallel { 
-    $digits = $_
-    while ($digits -notmatch "\d{3}") { $digits = "0" + $digits } # Add any missing leading 0s
-
-    # Set address and test if it pings
-    $prefix = $using:prefixString
-    $addr = $prefix + $digits
-    $ping = Test-Connection -Count 1 -Quiet $addr
-
-    $result = @{} | Select-Object Address, Pings
-    $result.Address = $addr
-    $result.Pings   = $ping
-    return $result
-
-  } -ThrottleLimit 254
-
-  return ($results | Where-Object { $_.Pings -eq $true } | Sort-Object Address)
+  Write-Error "Start IP address is greater than end IP address"
+  return $null
 }
-#Export-ModuleMember -Function Scan-IPRange
 
-Scan-IPRange -Start 192.168.2.1 -End 192.168.2.254
+function Get-IPRange {
+<#
+.SYNOPSIS
+    Returns an array of all IP addresses between the given start and end IP addresses, else returns $null
+.EXAMPLE
+    Get-IPRange -Start 192.168.2.1 -End 192.168.3.1
+#>
+  param(
+    [Parameter(Mandatory=$true, Position=0)][String]$Start,
+    [Parameter(Mandatory=$true, Position=1)][String]$End
+  )
+
+  # create an array of ip addresses between start and end
+
+  # Convert IP addresses to integer
+  $startIP = [System.Net.IPAddress]::Parse($Start).Address
+  $endIP = [System.Net.IPAddress]::Parse($End).Address
+
+  # convert ip addresses to byte array
+  $startIP = [System.BitConverter]::GetBytes($startIP)
+
+
+
+  # Loop through each IP address between start and end
+  $ipRange = @()
+  for ($i = $startIP; $i -le $endIP; $i++) {
+    $ipRange += [System.Net.IPAddress]($i).ToString()
+  }
+
+  return $ipRange
+}
