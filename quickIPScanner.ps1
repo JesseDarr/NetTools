@@ -69,21 +69,29 @@ function Get-IPRange {
     [Parameter(Mandatory=$true, Position=1)][String]$End
   )
 
-  # create an array of ip addresses between start and end
-
-  # Convert IP addresses to integer
-  $startIP = [System.Net.IPAddress]::Parse($Start).Address
-  $endIP = [System.Net.IPAddress]::Parse($End).Address
-
-  # convert ip addresses to byte array
-  $startIP = [System.BitConverter]::GetBytes($startIP)
-
-
-
-  # Loop through each IP address between start and end
+  $Start = "10.4.254.250"
+  $End   = "10.4.255.255"
+  
+  # Split into Octets
+  $sOcts = $Start -split "\."
+  $eOcts = $End -split "\."
+  
+  # Reverse the Octets
+  [array]::Reverse($sOcts)
+  [array]::Reverse($eOcts)
+  
+  # Convert Octets to Integer Values
+  $sInt = [bitconverter]::ToUInt32([byte[]]$sOcts,0)
+  $eInt = [bitconverter]::ToUInt32([byte[]]$eOcts,0)
+  
   $ipRange = @()
-  for ($i = $startIP; $i -le $endIP; $i++) {
-    $ipRange += [System.Net.IPAddress]($i).ToString()
+  for ($ip = $sInt; $ip -lt $eInt; $ip++)
+  {   
+      $cOcts = [bitconverter]::getbytes($ip) # Convert Integer to Octets - these are in reverse order
+      [array]::Reverse($cOcts)               # Reverse the Octets
+
+      # Join into String and add to ipRange
+      $ipRange += $currentIP -join "."
   }
 
   return $ipRange
