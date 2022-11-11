@@ -96,10 +96,15 @@ function Get-IPRange {
 function Scan-IPRange {
 <#
 .SYNOPSIS
-    Returns a hastable of all IP addresses that ping within a given range else reutnrs $null
+    Returns a hastable of all IP addresses that ping within a given range else reutnrs $null.
+
+    Count defaults to 1 if not specified.
 .EXAMPLE
     Scan-IPRange -Start 192.168.100.1 -End 192.168.100.150
+.EXAMPLE
+    Scan-IPRange -Start 192.168.100.1 -End 192.168.100.150 -Count 4
 #>
+  [CmdletBinding()]
   param(
     [Parameter(Mandatory=$true,  Position=0)][String]$Start,
     [Parameter(Mandatory=$true,  Position=1)][String]$End,
@@ -139,10 +144,6 @@ function Scan-IPRange {
   
   } -ThrottleLimit 254
     
-  return ($results | Where-Object { $_.Pings -eq $true } | Sort-Object Address)
+  return ($results | Where-Object { $_.Pings -eq $true } )
 }
-#Export-ModuleMember -Function Scan-IPRange
-
-Scan-IPRange -Start 192.168.20.1 -End 192.168.20.254
-  
-# while ($digits -notmatch "\d{3}") { $digits = "0" + $digits } # Add any missing leading 0s
+Export-ModuleMember -Function Scan-IPRange
