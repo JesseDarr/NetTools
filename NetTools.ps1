@@ -19,7 +19,7 @@ function Validate-IPAddress {
 
     # Test if each octet is between 0 and 255
     foreach ($octet in $octets) {
-      if ($octet -lt 0 -or $octet -gt 255) { 
+      if ([int]$octet -lt 0 -or [int]$octet -gt 255) { 
         Write-Error "Octet $octet is not between 0 and 255"
         return $null 
       }
@@ -68,13 +68,10 @@ function Get-IPRange {
     [Parameter(Mandatory=$true, Position=0)][String]$Start,
     [Parameter(Mandatory=$true, Position=1)][String]$End
   )
-
-  $Start = "10.4.254.250"
-  $End   = "10.4.255.255"
   
   # Split into Octets
-  $sOcts = $Start -split "\."
-  $eOcts = $End -split "\."
+  $sOcts = $Start.Split(".")
+  $eOcts = $End.Split(".")
   
   # Reverse the Octets
   [array]::Reverse($sOcts)
@@ -84,15 +81,68 @@ function Get-IPRange {
   $sInt = [bitconverter]::ToUInt32([byte[]]$sOcts,0)
   $eInt = [bitconverter]::ToUInt32([byte[]]$eOcts,0)
   
-  $ipRange = @()
-  for ($ip = $sInt; $ip -lt $eInt; $ip++)
+  # Loop through the range of integers, convert into octets, reverse them, join them, and add them to ipRange
+  $ipRange = [System.Collections.ArrayList]@() # Arraylist b/c it's super fast
+  for ($ip = $sInt; $ip -le $eInt; $ip++)
   {   
       $cOcts = [bitconverter]::getbytes($ip) # Convert Integer to Octets - these are in reverse order
       [array]::Reverse($cOcts)               # Reverse the Octets
-
-      # Join into String and add to ipRange
-      $ipRange += $currentIP -join "."
+      $null = $ipRange.Add($cOcts -join ".") # Join into String and add to ipRange - $null avoids output that would otherwise be returned
   }
 
   return $ipRange
 }
+
+function Scan-IPRange {
+<#
+.SYNOPSIS
+    Returns a hastable of all IP addresses that ping within a given range else reutnrs $null
+.EXAMPLE
+    Scan-IPRange -Start 192.168.100.1 -End 192.168.100.150
+#>
+  param(
+    [Parameter(Mandatory=$true,  Position=0)][String]$Start,
+    [Parameter(Mandatory=$true,  Position=1)][String]$End,
+    [Parameter(Mandatory=$false, Position=2)][Int16]$Count
+  )
+
+  # Set count if not specified
+  if($Count -eq 0) { $Count = 1 }
+  # Write error and return null if count greater than 10
+  if($Count -gt 10) {
+    Write-Error "Count must not be greater than 10"
+    return $null
+  }
+
+  # Validate Addresses
+  if (!(Validate-IPAddress -IP $Start)) { return $null }
+  if (!(Validate-IPAddress -IP $End))   { return $null }
+
+  # Validate Range
+  if (!(Validate-IPRange -Start $Start -End $End)) { return $null }
+
+  # Get IP Range
+  $ipAddresses = Get-IPRange -Start $Start -End $End
+
+  # Loop through IP Range, ping each IP, and add to results
+  $results = $ipAddresses | ForEach-Object -Parallel {
+    $ip = $_
+    # Test connection for IP
+    $count = $using:Count # get access to count
+    $ping = Test-Connection -Count $count -Quiet $ip
+  
+    # Build result hash table and add to results
+    $result = @{} | Select-Object Address, Pings
+    $result.Address = $ip
+    $result.Pings   = $ping
+    return $result
+  
+  } -ThrottleLimit 254
+    
+  return ($results | Where-Object { $_.Pings -eq $true } | Sort-Object Address)
+}
+#Export-ModuleMember -Function Scan-IPRange
+
+Scan-IPRange -Start 192.168.20.1 -End 192.168.20.254
+  
+# while ($digits -notmatch "\d{3}") { $digits = "0" + $digits } # Add any missing leading 0s
