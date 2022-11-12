@@ -96,7 +96,7 @@ function Get-IPRange {
 function Scan-IPRange {
 <#
 .SYNOPSIS
-    Returns a hastable of all IP addresses that ping within a given range else reutnrs $null.
+    Returns a hastable of all IP addresses that ping within a given range, else reutnrs $null.
 
     Count defaults to 1 if not specified.
 .EXAMPLE
@@ -146,4 +146,60 @@ function Scan-IPRange {
     
   return ($results | Where-Object { $_.Pings -eq $true } )
 }
-Export-ModuleMember -Function Scan-IPRange
+#Export-ModuleMember -Function Scan-IPRange
+
+function Scan-Ports {
+<#
+.SYNOPSIS
+    Returns a hastable of all ports that are open on a given IP address or hostname, else returns null
+.EXAMPLE
+    Scan-Ports -IP 192.168.0.100
+#>
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory=$true, Position=0)][String]$IP
+  )
+
+  # Validate IP
+  if (!(Validate-IPAddress -IP $IP)) { return $null }
+
+  # Loop through through the ports, test connection, and add to results
+  $results = 20..1024 | ForEach-Object -Parallel {
+    $port = $_
+    $ip   = $using:IP
+
+    # Build result hash table
+    $result = @{} | Select-Object Port, TCP, UDP
+    $result.Port = $port
+
+    # Create a new TcpClient object
+    $tcpClient = New-Object System.Net.Sockets.TcpClient
+    # Try to connect to the port
+    try { $tcpClient.Connect($IP, $port) } # returns null on success
+    catch {}                               # and errors on failure
+    # Set result.TCP and close the tcpClient
+    $result.TCP = $tcpClient.Connected
+    $tcpClient.Close()
+
+    # Create a new UdpClient object
+    $udpClient = New-Object System.Net.Sockets.UdpClient
+    # Try to connect to the port
+    try { $udpClient.Connect($IP, $port) } # returns null on success
+    catch {}                               # and errors on failure
+    # Set result.UDP and close the tcpClient
+    $result.UDP = $tcpClient.Connected
+    $tcpClient.Close()
+
+    return $result
+  } -ThrottleLimit 256
+
+  return ($results | Where-Object { $_.TCP -eq $true -or $_.UDP -eq $true} )
+  #return $results
+}
+#Export-ModuleMember -Function Scan-Ports
+
+Measure-Command { Scan-Ports -IP 192.168.20.2 }
+
+
+# For Scan-IPRange and Scan-Ports add some kind of verbose output
+# Find something to test on to make sure UDP is working ok
