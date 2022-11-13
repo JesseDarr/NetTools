@@ -128,23 +128,51 @@ function Scan-IPRange {
 
   # Get IP Range
   $ipAddresses = Get-IPRange -Start $Start -End $End
+  
+  # Remove any jobs that migth be laying around
+  if (Get-Job) { 
+    Write-Warning "Removing running jobs"
+    Get-Job | Stop-Job | Remove-job 
+  }
+
+  # Setup threadsafe counter to use in loop to get data for progress bar
+  $counterAryList = [System.Collections.ArrayList]@()
+  $counter        = [System.Collections.ArrayList]::Synchronized($counteraryList)
 
   # Loop through IP Range, ping each IP, and add to results
-  $results = $ipAddresses | ForEach-Object -Parallel {
+  $null = $ipAddresses | ForEach-Object -Parallel {
     $ip = $_
     # Test connection for IP
     $count = $using:Count # get access to count
     $ping = Test-Connection -Count $count -Quiet $ip
   
-    # Build result hash table and add to results
+    # Build result hash table
     $result = @{} | Select-Object Address, Pings
     $result.Address = $ip
     $result.Pings   = $ping
+
+    # Add empty string to counter
+    $counterCpy = $using:counter
+    $counterCpy.Add("")
+
     return $result
   
-  } -ThrottleLimit 254
+  } -AsJob -ThrottleLimit 254
     
+  # Show progress bar while still running jobs
+  while(Get-Job | Where-Object {$_.State -eq "Running"})
+  {    
+      Write-Progress -Activity "Scanning: " -PercentComplete ($counter.Count / $ipAddresses.Count * 100) -status ([string]$counter.Count + " / " + $ipAddresses.Count)
+      Start-Sleep -Milliseconds 100
+  }
+
+  # Get results and remove the job
+  $results = Get-Job | Receive-Job
+  Get-Job | Remove-Job
+
   return ($results | Where-Object { $_.Pings -eq $true } )
+  #return $results
+
 }
 #Export-ModuleMember -Function Scan-IPRange
 
@@ -168,8 +196,18 @@ function Scan-Ports {
   # Validate IP
   if (!(Validate-IPAddress -IP $IP)) { return $null }
 
+  # Remove any jobs that migth be laying around
+  if (Get-Job) { 
+    Write-Warning "Removing running jobs"
+    Get-Job | Stop-Job | Remove-job 
+  }
+
+  # Setup threadsafe counter to use in loop to get data for progress bar
+  $counterAryList = [System.Collections.ArrayList]@()
+  $counter        = [System.Collections.ArrayList]::Synchronized($counteraryList)
+
   # Loop through through the ports, test connection, and add to results
-  $results = 1..1024 | ForEach-Object -Parallel {
+  $null = 1..1024 | ForEach-Object -Parallel {
     $port = $_
     $ip   = $using:IP
 
@@ -195,15 +233,30 @@ function Scan-Ports {
     $result.UDP = $tcpClient.Connected
     $tcpClient.Close()
 
+    # Add empty string to counter
+    $counterCpy = $using:counter
+    $counterCpy.Add("")
+
     return $result
-  } -ThrottleLimit 256
+  } -AsJob -ThrottleLimit 256
+
+  # Show progress bar while still running jobs
+  while(Get-Job | Where-Object {$_.State -eq "Running"})
+  {    
+      Write-Progress -Activity "Scanning: " -PercentComplete ($counter.Count / 1024 * 100) -status ([string]$counter.Count + " / " + 1024)
+      Start-Sleep -Milliseconds 100
+  }
+  
+  # Get results and remove the job
+  $results = Get-Job | Receive-Job
+  Get-Job | Remove-Job
 
   return ($results | Where-Object { $_.TCP -eq $true -or $_.UDP -eq $true} )
   #return $results
 }
 #Export-ModuleMember -Function Scan-Ports
-
-Scan-Ports -IP 192.168.20.254
+#Scan-Ports -IP 192.168.20.2
+Scan-IPRange -Start 192.168.20.1 -End 192.168.20.254
 
 
 # For Scan-IPRange and Scan-Ports add some kind of verbose output
