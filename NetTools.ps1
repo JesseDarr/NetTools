@@ -159,12 +159,17 @@ function Scan-Ports {
   param(
     [Parameter(Mandatory=$true, Position=0)][String]$IP
   )
+  # 1-1024 - well known
+  # 1-65535 - all
+  # 20-80 - range
+  # verbose output flag
+  # TCP or UDP or Both
 
   # Validate IP
   if (!(Validate-IPAddress -IP $IP)) { return $null }
 
   # Loop through through the ports, test connection, and add to results
-  $results = 20..1024 | ForEach-Object -Parallel {
+  $results = 1..1024 | ForEach-Object -Parallel {
     $port = $_
     $ip   = $using:IP
 
@@ -198,8 +203,10 @@ function Scan-Ports {
 }
 #Export-ModuleMember -Function Scan-Ports
 
-Measure-Command { Scan-Ports -IP 192.168.20.2 }
+Scan-Ports -IP 192.168.20.254
 
 
 # For Scan-IPRange and Scan-Ports add some kind of verbose output
+# Setup progress bar for both of them
+
 # Find something to test on to make sure UDP is working ok
