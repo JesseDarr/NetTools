@@ -103,12 +103,15 @@ function Scan-IPRange {
     Scan-IPRange -Start 192.168.100.1 -End 192.168.100.150
 .EXAMPLE
     Scan-IPRange -Start 192.168.100.1 -End 192.168.100.150 -Count 4
+.EXAMPLE
+    Scan-IPRange -Start 192.168.100.1 -End 192.168.100.150 -Count 4 -FullOutPut
 #>
   [CmdletBinding()]
   param(
     [Parameter(Mandatory=$true,  Position=0)][String]$Start,
     [Parameter(Mandatory=$true,  Position=1)][String]$End,
-    [Parameter(Mandatory=$false, Position=2)][Int16]$Count
+    [Parameter(Mandatory=$false, Position=2)][Int16]$Count,
+    [Parameter(Mandatory=$false, Position=4)][Switch]$FullOutput
   )
 
   # Set count if not specified
@@ -153,7 +156,7 @@ function Scan-IPRange {
 
     # Add empty string to counter
     $counterCpy = $using:counter
-    $counterCpy.Add("")
+    $null = $counterCpy.Add("")
 
     return $result
   
@@ -170,8 +173,9 @@ function Scan-IPRange {
   $results = Get-Job | Receive-Job
   Get-Job | Remove-Job
 
-  return ($results | Where-Object { $_.Pings -eq $true } )
-  #return $results
+  # Return results
+  if ($FullOutput) { return $results }
+  else             { return ($results | Where-Object { $_.Pings -eq $true }) }
 
 }
 #Export-ModuleMember -Function Scan-IPRange
@@ -182,16 +186,20 @@ function Scan-Ports {
     Returns a hastable of all ports that are open on a given IP address or hostname, else returns null
 .EXAMPLE
     Scan-Ports -IP 192.168.0.100
+.EXAMPLE
+    Scan-Ports -IP 192.168.0.100 -FullOutput    
 #>
   [CmdletBinding()]
   param(
-    [Parameter(Mandatory=$true, Position=0)][String]$IP
+    [Parameter(Mandatory=$true,  Position=0)][String]$IP,
+    [Parameter(Mandatory=$false, Position=1)][Switch]$FullOutput
   )
   # 1-1024 - well known
   # 1-65535 - all
   # 20-80 - range
   # verbose output flag
   # TCP or UDP or Both
+  # Add hostname support
 
   # Validate IP
   if (!(Validate-IPAddress -IP $IP)) { return $null }
@@ -235,7 +243,7 @@ function Scan-Ports {
 
     # Add empty string to counter
     $counterCpy = $using:counter
-    $counterCpy.Add("")
+    $null = $counterCpy.Add("")
 
     return $result
   } -AsJob -ThrottleLimit 256
@@ -251,15 +259,14 @@ function Scan-Ports {
   $results = Get-Job | Receive-Job
   Get-Job | Remove-Job
 
-  return ($results | Where-Object { $_.TCP -eq $true -or $_.UDP -eq $true} )
-  #return $results
+  # Return results
+  if ($FullOutput) { return $results }
+  else             { return ($results | Where-Object { $_.TCP -eq $true -or $_.UDP -eq $true }) }
 }
 #Export-ModuleMember -Function Scan-Ports
-#Scan-Ports -IP 192.168.20.2
-Scan-IPRange -Start 192.168.20.1 -End 192.168.20.254
 
-
-# For Scan-IPRange and Scan-Ports add some kind of verbose output
-# Setup progress bar for both of them
+#Scan-IPRange 192.168.20.1 192.168.20.254 -FullOutput
+Scan-Ports -IP 192.168.20.2 -FullOutput
 
 # Find something to test on to make sure UDP is working ok
+# write heading comments like DnsClient-PS
